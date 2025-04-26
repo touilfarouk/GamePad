@@ -26,181 +26,136 @@ import kotlin.math.*
 
 @Composable
 fun HomeScreen() {
-    // Support RTL
     val layoutDirection = LocalLayoutDirection.current
     val directionFactor = if (layoutDirection == LayoutDirection.Rtl) -1 else 1
 
     val scope = rememberCoroutineScope()
-    val buttonSize = 90.dp
+    val buttonSize = 60.dp
 
-
-    // Swipe size in px
     val buttonSizePx = with(LocalDensity.current) { buttonSize.toPx() }
     val dragSizePx = buttonSizePx * 1.5f
 
-    // Drag offset
     val offsetX = remember { Animatable(0f) }
     val offsetY = remember { Animatable(0f) }
 
     var isDragging by remember { mutableStateOf(false) }
-
     var currentPosition by remember { mutableStateOf<Position?>(null) }
 
     LaunchedEffect(offsetX.value, offsetY.value) {
-
         val newPosition = getPosition(
             offset = Offset(offsetX.value, offsetY.value),
             buttonSizePx = buttonSizePx
         )
-
         currentPosition = newPosition
     }
 
     Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp)
     ) {
+        // Draw the shape at the center of the screen
+        currentPosition?.let { position ->
+            DrawShape(
+                position = position,
+                isSelected = true // Always true while dragging
+            )
+        }
 
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.fillMaxWidth()
+        // Joystick at bottom right
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd) // <<< Important move joystick to bottom right
+                .size(buttonSize * 3),
+            contentAlignment = Alignment.Center
         ) {
-            Box(modifier = Modifier.size(buttonSize * 2)) {
-                currentPosition?.let { position ->
-                    Box(
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .fillMaxSize()
-                            .background(Color.DarkGray.copy(alpha = 0.5f))
-                            .padding(20.dp)
-                        ,
-                        contentAlignment = Alignment.Center
-                    ) {
-                        DrawShape(
-                            position,
-                            isSelected = true
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(40.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.White, CircleShape)
+            )
 
             Box(
                 modifier = Modifier
-                    .size(buttonSize * 4)
-                    .background(Color.White, CircleShape)
-                ,
-                contentAlignment = Alignment.Center
-            ) {
+                    .offset {
+                        IntOffset(
+                            x = (offsetX.value).roundToInt(),
+                            y = (offsetY.value).roundToInt()
+                        )
+                    }
+                    .size(buttonSize)
+                    .background(Color.DarkGray, CircleShape)
+                    .pointerInput(Unit) {
+                        detectDragGestures(
+                            onDragStart = { isDragging = true },
+                            onDragEnd = {
+                                scope.launch { offsetX.animateTo(0f) }
+                                scope.launch { offsetY.animateTo(0f) }
+                                isDragging = false
+                                currentPosition = null // Reset shape when released
+                            },
+                            onDragCancel = {
+                                scope.launch { offsetX.animateTo(0f) }
+                                scope.launch { offsetY.animateTo(0f) }
+                                isDragging = false
+                                currentPosition = null // Reset shape when cancelled
+                            },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
 
-                Box(
+                                scope.launch {
+                                    val newOffsetX = offsetX.value + dragAmount.x * directionFactor
+                                    val newOffsetY = offsetY.value + dragAmount.y
+
+                                    if (sqrt(newOffsetX.pow(2) + newOffsetY.pow(2)) < dragSizePx) {
+                                        offsetX.snapTo(newOffsetX)
+                                        offsetY.snapTo(newOffsetY)
+                                    } else if (sqrt(offsetX.value.pow(2) + newOffsetY.pow(2)) < dragSizePx) {
+                                        offsetY.snapTo(newOffsetY)
+                                    } else if (sqrt(newOffsetX.pow(2) + offsetY.value.pow(2)) < dragSizePx) {
+                                        offsetX.snapTo(newOffsetX)
+                                    }
+                                }
+                            }
+                        )
+                    }
+            )
+
+            val buttonAlpha = remember { Animatable(0f) }
+
+            LaunchedEffect(isDragging) {
+                if (isDragging) {
+                    buttonAlpha.animateTo(1f)
+                } else {
+                    buttonAlpha.animateTo(0f)
+                }
+            }
+
+            Position.values().forEach { position ->
+                val offset = position.getOffset(buttonSizePx)
+                MyButton(
                     modifier = Modifier
                         .offset {
                             IntOffset(
-                                x = (offsetX.value).roundToInt(),
-                                y = (offsetY.value).roundToInt()
+                                x = offset.x.roundToInt(),
+                                y = offset.y.roundToInt()
                             )
                         }
-                        .width(buttonSize)
-                        .height(buttonSize)
-                        .alpha(0.8f)
-                        .background(Color.DarkGray, CircleShape)
-                        .pointerInput(Unit) {
-
-                            detectDragGestures(
-                                onDragStart = {
-                                    isDragging = true
-                                },
-                                onDragEnd = {
-                                    scope.launch {
-                                        offsetX.animateTo(0f)
-                                    }
-                                    scope.launch {
-                                        offsetY.animateTo(0f)
-                                    }
-                                    isDragging = false
-                                },
-                                onDragCancel = {
-                                    scope.launch {
-                                        offsetX.animateTo(0f)
-                                    }
-                                    scope.launch {
-                                        offsetY.animateTo(0f)
-                                    }
-                                    isDragging = false
-                                },
-                                onDrag = { change, dragAmount ->
-                                    change.consume()
-
-                                    scope.launch {
-                                        val newOffsetX = offsetX.value + dragAmount.x * directionFactor
-                                        val newOffsetY = offsetY.value + dragAmount.y
-
-                                        if (
-                                            sqrt(newOffsetX.pow(2) + newOffsetY.pow(2)) < dragSizePx
-                                        ) {
-                                            offsetX.snapTo(newOffsetX)
-                                            offsetY.snapTo(newOffsetY)
-                                        } else if (
-                                            sqrt(offsetX.value.pow(2) + newOffsetY.pow(2)) < dragSizePx
-                                        ) {
-                                            offsetY.snapTo(newOffsetY)
-                                        } else if (
-                                            sqrt(newOffsetX.pow(2) + offsetY.value.pow(2)) < dragSizePx
-                                        ) {
-                                            offsetX.snapTo(newOffsetX)
-                                        }
-                                    }
-
-                                }
-                            )
+                        .graphicsLayer {
+                            alpha = buttonAlpha.value
+                            scaleX = buttonAlpha.value
+                            scaleY = buttonAlpha.value
                         }
-
+                        .size(buttonSize)
+                        .padding(8.dp),
+                    isSelected = position == currentPosition,
+                    position = position
                 )
-
-                val buttonAlpha = remember {
-                    Animatable(0f)
-                }
-
-                LaunchedEffect(key1 = isDragging) {
-                    if (isDragging) {
-                        buttonAlpha.animateTo(1f)
-                    } else {
-                        buttonAlpha.animateTo(0f)
-                    }
-                }
-
-                Position.values().forEach { position ->
-                    val offset = position.getOffset(buttonSizePx)
-                    MyButton(
-                        modifier = Modifier
-                            .offset {
-                                IntOffset(
-                                    x = offset.x.roundToInt(),
-                                    y = offset.y.roundToInt()
-                                )
-                            }
-                            .graphicsLayer {
-                                alpha = buttonAlpha.value
-                                scaleX = buttonAlpha.value
-                                scaleY = buttonAlpha.value
-                            }
-                            .size(buttonSize)
-                            .padding(8.dp)
-                        ,
-                        isSelected = position == currentPosition,
-                        position = position
-                    )
-                }
-
             }
         }
-
-
     }
-
 }
+
 
 @Composable
 fun MyButton(
